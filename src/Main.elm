@@ -3,9 +3,11 @@ module Main exposing (main)
 import Browser
 import Browser.Events exposing (onKeyPress)
 import Css exposing (..)
+import Game exposing (Object(..), PlayerAction, Position)
 import Html.Styled exposing (..)
 import Html.Styled.Attributes exposing (css, href, src)
 import Html.Styled.Events exposing (onClick)
+import Input
 import Json.Decode as Decode
 
 
@@ -13,18 +15,9 @@ import Json.Decode as Decode
 ---- MODEL ----
 
 
-type Object
-    = Player
-    | Wall
-    | Floor
-
-
-type alias Position =
-    ( Int, Int )
-
-
 type alias Model =
-    { objects : List ( Position, Object )
+    { gameState : Game.State
+    , inputState : Input.State
     }
 
 
@@ -39,7 +32,8 @@ room width height =
 
 init : ( Model, Cmd Msg )
 init =
-    ( { objects = ( ( 3, 3 ), Player ) :: room 10 10
+    ( { gameState = { objects = ( ( 3, 3 ), Player ) :: room 10 10 }
+      , inputState = {}
       }
     , Cmd.none
     )
@@ -49,98 +43,35 @@ init =
 ---- UPDATE ----
 
 
-type Direction
-    = Up
-    | Down
-    | Left
-    | Right
-
-
-type PlayerAction
-    = Move Direction
-
-
 type Msg
-    = PlayerAction PlayerAction
+    = Input Input.Event
     | NoOp
 
 
 keyDecoder : Decode.Decoder Msg
 keyDecoder =
-    Decode.map
-        (toDirection >> Maybe.map (Move >> PlayerAction) >> Maybe.withDefault NoOp)
-        (Decode.field "key" Decode.string)
-
-
-toDirection : String -> Maybe Direction
-toDirection string =
-    case string of
-        "a" ->
-            Just Left
-
-        "d" ->
-            Just Right
-
-        "w" ->
-            Just Up
-
-        "s" ->
-            Just Down
-
-        _ ->
-            Nothing
-
-
-getNeighbour dir ( x, y ) =
-    case dir of
-        Left ->
-            ( x - 1, y )
-
-        Right ->
-            ( x + 1, y )
-
-        Up ->
-            ( x, y - 1 )
-
-        Down ->
-            ( x, y + 1 )
-
-
-isPassable pos model =
-    model.objects
-        |> List.any (\( p, obj ) -> p == pos && obj == Wall)
-        |> not
-
-
-movePlayer dir model =
-    { objects =
-        model.objects
-            |> List.map
-                (\( pos, obj ) ->
-                    if obj == Player then
-                        let
-                            targetTile =
-                                getNeighbour dir pos
-                        in
-                        if isPassable targetTile model then
-                            ( getNeighbour dir pos, obj )
-
-                        else
-                            ( pos, obj )
-
-                    else
-                        ( pos, obj )
-                )
-    }
+    Decode.map (Input.KeyPress >> Input) (Decode.field "key" Decode.string)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        PlayerAction action ->
-            case action of
-                Move dir ->
-                    ( movePlayer dir model, Cmd.none )
+        Input event ->
+            let
+                ( inputState, playerAction ) =
+                    Input.update event model.inputState
+            in
+            case playerAction of
+                Maybe.Nothing ->
+                    ( { model | inputState = inputState }, Cmd.none )
+
+                Maybe.Just action ->
+                    ( { model
+                        | gameState = Game.update action model.gameState
+                        , inputState = inputState
+                      }
+                    , Cmd.none
+                    )
 
         NoOp ->
             ( model, Cmd.none )
@@ -190,7 +121,7 @@ view model =
         []
         [ p [] [ text "Welcome to Elm RogueLike" ]
         , p [] [ text "A,S,D,F to move around" ]
-        , div [] (List.map objectView model.objects)
+        , div [] (List.map objectView model.gameState.objects)
         ]
 
 
