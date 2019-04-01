@@ -56,15 +56,19 @@ type Direction
     | Right
 
 
-type Msg
+type PlayerAction
     = Move Direction
+
+
+type Msg
+    = PlayerAction PlayerAction
     | NoOp
 
 
 keyDecoder : Decode.Decoder Msg
 keyDecoder =
     Decode.map
-        (toDirection >> Maybe.map Move >> Maybe.withDefault NoOp)
+        (toDirection >> Maybe.map (Move >> PlayerAction) >> Maybe.withDefault NoOp)
         (Decode.field "key" Decode.string)
 
 
@@ -72,19 +76,19 @@ toDirection : String -> Maybe Direction
 toDirection string =
     case string of
         "a" ->
-            Maybe.Just Left
+            Just Left
 
         "d" ->
-            Maybe.Just Right
+            Just Right
 
         "w" ->
-            Maybe.Just Up
+            Just Up
 
         "s" ->
-            Maybe.Just Down
+            Just Down
 
         _ ->
-            Maybe.Nothing
+            Nothing
 
 
 getNeighbour dir ( x, y ) =
@@ -133,8 +137,10 @@ movePlayer dir model =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        Move dir ->
-            ( movePlayer dir model, Cmd.none )
+        PlayerAction action ->
+            case action of
+                Move dir ->
+                    ( movePlayer dir model, Cmd.none )
 
         NoOp ->
             ( model, Cmd.none )
